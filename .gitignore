@@ -1,0 +1,18 @@
+# IDE/editor directories
+.idea/
+.vscode/
+
+# macOS metadata
+.DS_Store
+
+# Rust build outputs
+/target/
+
+# Local binaries or dist
+/bin/
+/dist/
+
+# Go caches/builds (legacy)
+/.gocache/
+/.gomodcache/
+/treecat

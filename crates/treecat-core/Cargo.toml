@@ -1,0 +1,22 @@
+[package]
+name = "treecat-core"
+version = "1.0.0"
+edition = "2021"
+authors = ["treecat contributors"]
+license = "MIT"
+description = "Core tree traversal, filtering, classification, and rendering pipeline for treecat."
+repository = "https://github.com/jhklarcher/treecat"
+homepage = "https://github.com/jhklarcher/treecat"
+documentation = "https://github.com/jhklarcher/treecat/tree/main/docs"
+readme = "../../README.md"
+keywords = ["treecat", "tree", "files", "snapshot"]
+categories = ["command-line-utilities", "filesystem"]
+
+[dependencies]
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+walkdir = "2.5"
+globset = "0.4"
+tempfile = "3.10"
+anstyle = "1.0"
+arboard = "3.4"

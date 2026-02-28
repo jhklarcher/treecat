@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "crates/treecat-core",
+    "crates/treecat-cli",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "1.0.0"
+authors = ["treecat contributors"]
+repository = "https://github.com/jhklarcher/treecat"
+homepage = "https://github.com/jhklarcher/treecat"
+
+[workspace.dependencies]
