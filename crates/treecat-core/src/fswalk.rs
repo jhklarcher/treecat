@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
-use crate::config::Config;
+use crate::config::{build_exclude_dir_rules, Config, ExcludeDirRules};
 
 #[derive(Debug, Clone)]
 pub struct TreeNode {
@@ -34,8 +34,9 @@ pub fn walk(cfg: &Config) -> Result<(TreeNode, Vec<FileInfo>), String> {
         return Err(format!("root is not a directory: {}", root.display()));
     }
 
-    let mut exclude_dirs: HashSet<String> = default_excludes();
-    exclude_dirs.extend(cfg.exclude_dirs.iter().cloned());
+    let mut exclude_dirs =
+        build_exclude_dir_rules(&cfg.exclude_dirs).map_err(|e| format!("invalid config: {e}"))?;
+    exclude_dirs.extend_basenames(default_excludes());
 
     let mut files = Vec::new();
 
@@ -61,6 +62,7 @@ pub fn walk(cfg: &Config) -> Result<(TreeNode, Vec<FileInfo>), String> {
         .filter_entry(|e| {
             should_descend(
                 e,
+                &root_abs,
                 &exclude_dirs,
                 cfg.max_depth,
                 cfg.follow_symlinks,
@@ -90,16 +92,12 @@ pub fn walk(cfg: &Config) -> Result<(TreeNode, Vec<FileInfo>), String> {
             }
         }
 
+        let is_dir = entry.file_type().is_dir();
         let name = entry
             .file_name()
             .to_str()
             .map(|s| s.to_string())
             .unwrap_or_else(|| rel_path.clone());
-
-        let is_dir = entry.file_type().is_dir();
-        if is_dir && exclude_dirs.contains(&name) && entry.depth() > 0 {
-            continue;
-        }
 
         let is_symlink = entry.file_type().is_symlink();
 
@@ -183,7 +181,8 @@ fn parent_rel_path(rel: &str) -> Option<String> {
 
 fn should_descend(
     entry: &walkdir::DirEntry,
-    exclude_dirs: &HashSet<String>,
+    root_abs: &Path,
+    exclude_dirs: &ExcludeDirRules,
     max_depth: Option<usize>,
     follow_symlinks: bool,
     visited_symlinks: &mut HashSet<PathBuf>,
@@ -205,8 +204,8 @@ fn should_descend(
     };
 
     if is_dir || is_symlink_dir {
-        if let Some(name) = entry.file_name().to_str() {
-            if exclude_dirs.contains(name) {
+        if let Ok(rel_path) = entry.path().strip_prefix(root_abs) {
+            if exclude_dirs.matches_dir(rel_path) {
                 return false;
             }
         }
@@ -275,5 +274,72 @@ mod tests {
             }
             assert_ne!(child.name, "skipme");
         }
+    }
+
+    #[test]
+    fn basename_exclude_dir_matches_all_directories_with_that_name() {
+        let dir = tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("a/skipme")).unwrap();
+        fs::create_dir_all(dir.path().join("b/skipme")).unwrap();
+        fs::write(dir.path().join("a/skipme/file.txt"), b"a").unwrap();
+        fs::write(dir.path().join("b/skipme/file.txt"), b"b").unwrap();
+        fs::write(dir.path().join("keep.txt"), b"keep").unwrap();
+
+        let cfg = Config {
+            root_path: dir.path().to_string_lossy().to_string(),
+            exclude_dirs: vec!["skipme".into()],
+            ..Default::default()
+        };
+
+        let (tree, files) = walk(&cfg).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].path, "keep.txt");
+
+        let rendered_paths: Vec<_> = tree
+            .children
+            .iter()
+            .map(|child| child.path.as_str())
+            .collect();
+        assert!(rendered_paths.contains(&"a"));
+        assert!(rendered_paths.contains(&"b"));
+        assert!(rendered_paths.contains(&"keep.txt"));
+        for child in &tree.children {
+            if child.path == "a" || child.path == "b" {
+                assert!(child.children.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn exact_path_exclude_dir_only_matches_the_requested_subtree() {
+        let dir = tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("a/skipme")).unwrap();
+        fs::create_dir_all(dir.path().join("b/skipme")).unwrap();
+        fs::write(dir.path().join("a/skipme/file.txt"), b"a").unwrap();
+        fs::write(dir.path().join("b/skipme/file.txt"), b"b").unwrap();
+
+        let cfg = Config {
+            root_path: dir.path().to_string_lossy().to_string(),
+            exclude_dirs: vec!["a/skipme".into()],
+            ..Default::default()
+        };
+
+        let (tree, files) = walk(&cfg).unwrap();
+        let file_paths: Vec<_> = files.iter().map(|file| file.path.as_str()).collect();
+        assert_eq!(file_paths, vec!["b/skipme/file.txt"]);
+
+        let a = tree
+            .children
+            .iter()
+            .find(|child| child.path == "a")
+            .unwrap();
+        let b = tree
+            .children
+            .iter()
+            .find(|child| child.path == "b")
+            .unwrap();
+        assert!(a.children.is_empty());
+        assert_eq!(b.children.len(), 1);
+        assert_eq!(b.children[0].path, "b/skipme");
     }
 }

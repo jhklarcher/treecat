@@ -21,7 +21,7 @@ Examples:
 treecat
 treecat src --max-depth 1
 treecat . README.md src/main.rs --files-only
-treecat . -x rs,md --exclude-dir target --max-size 200K --max-files 50
+treecat . -x rs,md -d target -d src/generated --max-size 200K --max-files 50
 treecat . --follow-symlinks --absolute
 treecat . --copy
 treecat --config ~/.config/treecat/config.toml
@@ -39,6 +39,7 @@ treecat --no-config
 
 - Tree and content sections can be toggled independently.
 - Include/exclude filters affect tree and content selection.
+- `-d, --exclude-dir` supports directory basenames and exact root-relative subdirectory paths.
 - Content supports size/count limits; tree remains unaffected by those limits.
 - Binary files are skipped safely with human-readable size stubs.
 - Clipboard copy is optional and non-fatal on clipboard backend failure.

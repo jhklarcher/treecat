@@ -27,7 +27,10 @@ Exclude filters apply after includes.
 
 - `-e`, `--exclude-glob <PATTERN>`: basename glob (repeatable).
 - `-X`, `--exclude-ext <EXT[,EXT...]>`: extension exclude list (repeatable, case-insensitive).
-- `--exclude-dir <NAME>`: exclude directories by basename (repeatable).
+- `-d`, `--exclude-dir <NAME|PATH>`: exclude directories by basename or exact root-relative path (repeatable).
+  - Values without path separators match any directory with that basename.
+  - Values with path separators match one exact root-relative subdirectory.
+  - Path values reject absolute paths, `.`, and `..`.
 
 Default excluded directories:
 
@@ -70,7 +73,7 @@ Default excluded directories:
 treecat
 treecat src --max-depth 1
 treecat . README.md src/main.rs --files-only
-treecat . -x rs,md --exclude-dir target --max-size 200K --max-files 50
+treecat . -x rs,md -d target -d src/generated --max-size 200K --max-files 50
 treecat . --follow-symlinks --absolute
 treecat . --copy
 treecat --config ~/.config/treecat/config.toml
