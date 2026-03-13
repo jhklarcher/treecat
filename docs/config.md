@@ -44,6 +44,9 @@ Notes:
 - Unknown keys are rejected (`deny_unknown_fields`).
 - `max_size_bytes` is raw bytes in config files.
 - Human suffix parsing (`200K`, `10M`) is CLI-only via `--max-size`.
+- `exclude_dirs` entries without path separators match directory basenames anywhere in the tree.
+- `exclude_dirs` entries with path separators match exact root-relative subdirectory paths.
+- Path-style `exclude_dirs` entries reject absolute paths, `.`, and `..`.
 
 ## Example
 
@@ -51,7 +54,7 @@ Notes:
 root_path = "/path/to/project"
 files_only = true
 include_exts = ["rs", "md"]
-exclude_dirs = ["target"]
+exclude_dirs = ["target", "src/generated"]
 max_size_bytes = 204800
 max_files = 100
 color_mode = "never"

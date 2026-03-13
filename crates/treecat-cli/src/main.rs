@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use clap::{
     parser::ValueSource, ArgAction, ArgMatches, CommandFactory, FromArgMatches, Parser, ValueEnum,
 };
-use treecat_core::config::{ColorMode, Config};
+use treecat_core::config::{build_exclude_dir_rules, ColorMode, Config};
 use treecat_core::run::run;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -19,7 +19,7 @@ Examples:
   treecat
   treecat src --max-depth 1
   treecat . README.md src/main.rs --files-only
-  treecat . -x rs,md --exclude-dir target --max-size 200K --max-files 50
+  treecat . -x rs,md -d target -d src/generated --max-size 200K --max-files 50
   treecat . --color always
   treecat . --copy
   treecat --config ~/.config/treecat/config.toml
@@ -76,8 +76,13 @@ struct Cli {
     #[arg(short = 'X', long = "exclude-ext", action = ArgAction::Append)]
     exclude_ext: Vec<String>,
 
-    /// Exclude directories by basename (repeatable). Defaults include .git, .hg, .svn, .idea, .vscode, node_modules, __pycache__, .venv.
-    #[arg(long = "exclude-dir", action = ArgAction::Append)]
+    /// Exclude directories by basename or exact root-relative path (repeatable). Defaults include .git, .hg, .svn, .idea, .vscode, node_modules, __pycache__, .venv.
+    #[arg(
+        short = 'd',
+        long = "exclude-dir",
+        value_name = "NAME|PATH",
+        action = ArgAction::Append
+    )]
     exclude_dir: Vec<String>,
 
     /// Skip files larger than this size (supports B/K/M/G/T suffixes).
@@ -382,6 +387,7 @@ fn normalize_and_validate_config(cfg: &mut Config) -> Result<(), String> {
     if cfg.relative_paths && cfg.absolute_paths {
         return Err("cannot use both relative_paths and absolute_paths in config".into());
     }
+    build_exclude_dir_rules(&cfg.exclude_dirs)?;
     if !cfg.relative_paths && !cfg.absolute_paths {
         cfg.relative_paths = true;
     }

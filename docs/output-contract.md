@@ -28,6 +28,7 @@ Flags can disable either section:
 Filtering behavior:
 
 - `--exclude-dir` and `--max-depth` always affect traversal/tree.
+- `--exclude-dir` matches directory basenames by default, or one exact root-relative subdirectory when the value contains a path separator.
 - File include/exclude filters (`--include-*`, `--exclude-*`) affect tree entries.
 - `--max-size` and `--max-files` do not affect the tree.
 - When file filters are active, directories without matching descendants are omitted.

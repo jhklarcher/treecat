@@ -49,6 +49,19 @@ fn run_treecat(args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+fn exclude_dir_fixture() -> tempfile::TempDir {
+    let dir = tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("a/skipme")).unwrap();
+    std::fs::create_dir_all(dir.path().join("a/keepme")).unwrap();
+    std::fs::create_dir_all(dir.path().join("b/skipme")).unwrap();
+    std::fs::create_dir_all(dir.path().join("b/keepme")).unwrap();
+    std::fs::write(dir.path().join("a/skipme/file.txt"), b"a skip\n").unwrap();
+    std::fs::write(dir.path().join("a/keepme/file.txt"), b"a keep\n").unwrap();
+    std::fs::write(dir.path().join("b/skipme/file.txt"), b"b skip\n").unwrap();
+    std::fs::write(dir.path().join("b/keepme/file.txt"), b"b keep\n").unwrap();
+    dir
+}
+
 #[test]
 fn renders_tree_and_contents() {
     let dir = fixture_path();
@@ -155,6 +168,37 @@ fn loads_default_config_from_home_path() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("# root.txt"));
     assert!(stdout.contains("# sub/nested.txt"));
+}
+
+#[test]
+fn config_exclude_dir_exact_path_is_applied() {
+    let fixture = exclude_dir_fixture();
+    let home = tempdir().unwrap();
+    let cfg_dir = home.path().join(".config/treecat");
+    std::fs::create_dir_all(&cfg_dir).unwrap();
+    std::fs::write(
+        cfg_dir.join("config.toml"),
+        format!(
+            "root_path = {:?}\nfiles_only = true\nexclude_dirs = [\"a/skipme\"]\n",
+            fixture.path().to_string_lossy()
+        ),
+    )
+    .unwrap();
+
+    let output = run_treecat_output_env_with_removals(
+        &[],
+        &[("HOME", home.path().to_str().unwrap())],
+        &["XDG_CONFIG_HOME", "TREECAT_CONFIG"],
+    );
+    assert!(
+        output.status.success(),
+        "treecat failed with config exclude-dir path: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("# a/skipme/file.txt"));
+    assert!(stdout.contains("# b/skipme/file.txt"));
 }
 
 #[test]
@@ -297,4 +341,105 @@ fn tree_without_file_filters_keeps_empty_directories() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("empty/"));
     assert!(stdout.contains("file.txt"));
+}
+
+#[test]
+fn exact_path_exclude_dir_affects_tree_only() {
+    let dir = exclude_dir_fixture();
+    let output = run_treecat_output(&[
+        dir.path().to_str().unwrap(),
+        "--tree-only",
+        "--exclude-dir",
+        "a/skipme",
+    ]);
+    assert!(
+        output.status.success(),
+        "treecat failed with exact exclude-dir tree filter: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("a/"));
+    assert!(stdout.contains("b/"));
+    assert_eq!(stdout.matches("skipme/").count(), 1);
+}
+
+#[test]
+fn exact_path_exclude_dir_affects_files_only() {
+    let dir = exclude_dir_fixture();
+    let output = run_treecat_output(&[
+        dir.path().to_str().unwrap(),
+        "--files-only",
+        "--exclude-dir",
+        "a/skipme",
+    ]);
+    assert!(
+        output.status.success(),
+        "treecat failed with exact exclude-dir files filter: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("# a/skipme/file.txt"));
+    assert!(stdout.contains("# a/keepme/file.txt"));
+    assert!(stdout.contains("# b/skipme/file.txt"));
+}
+
+#[test]
+fn repeated_exclude_dir_values_can_mix_basename_and_exact_path_rules() {
+    let dir = exclude_dir_fixture();
+    let output = run_treecat_output(&[
+        dir.path().to_str().unwrap(),
+        "--files-only",
+        "-d",
+        "skipme",
+        "--exclude-dir",
+        "a/keepme",
+    ]);
+    assert!(
+        output.status.success(),
+        "treecat failed with mixed exclude-dir rules: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("# a/skipme/file.txt"));
+    assert!(!stdout.contains("# b/skipme/file.txt"));
+    assert!(!stdout.contains("# a/keepme/file.txt"));
+    assert!(stdout.contains("# b/keepme/file.txt"));
+}
+
+#[test]
+fn short_exclude_dir_flag_matches_long_form() {
+    let dir = exclude_dir_fixture();
+    let short = run_treecat(&[
+        dir.path().to_str().unwrap(),
+        "--files-only",
+        "-d",
+        "a/skipme",
+    ]);
+    let long = run_treecat(&[
+        dir.path().to_str().unwrap(),
+        "--files-only",
+        "--exclude-dir",
+        "a/skipme",
+    ]);
+
+    assert_eq!(short, long);
+}
+
+#[test]
+fn invalid_exact_path_exclude_dir_fails() {
+    let dir = fixture_path();
+    let output = run_treecat_output(&[
+        dir.to_str().unwrap(),
+        "--files-only",
+        "--exclude-dir",
+        "dir/../skip",
+    ]);
+    assert!(!output.status.success());
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("invalid exclude-dir value"));
+    assert!(stderr.contains("'..' segments are not allowed"));
 }

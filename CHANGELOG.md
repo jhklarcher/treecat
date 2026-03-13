@@ -4,7 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
-- No changes yet.
+### Changed
+
+- `-d, --exclude-dir` now accepts exact root-relative subdirectory paths in addition to basename matches.
+- CLI help, README, and docs now describe mixed basename/path exclusion behavior and the `-d` short flag.
 
 ## [1.0.0] - 2026-02-28
 
